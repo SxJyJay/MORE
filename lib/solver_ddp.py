@@ -43,15 +43,26 @@ ITER_REPORT_TEMPLATE = """
 [info] ETA: {eta_h}h {eta_m}m {eta_s}s
 """
 
+# EPOCH_REPORT_TEMPLATE = """
+# ---------------------------------summary---------------------------------
+# [train] train_bleu-1: {train_bleu_1}
+# [train] train_bleu-2: {train_bleu_2}
+# [train] train_bleu-3: {train_bleu_3}
+# [train] train_bleu-4: {train_bleu_4}
+# [train] train_cider: {train_cider}
+# [train] train_rouge: {train_rouge}
+# [train] train_meteor: {train_meteor}
+# [val]   val_bleu-1: {val_bleu_1}
+# [val]   val_bleu-2: {val_bleu_2}
+# [val]   val_bleu-3: {val_bleu_3}
+# [val]   val_bleu-4: {val_bleu_4}
+# [val]   val_cider: {val_cider}
+# [val]   val_rouge: {val_rouge}
+# [val]   val_meteor: {val_meteor}
+# """
+
 EPOCH_REPORT_TEMPLATE = """
 ---------------------------------summary---------------------------------
-[train] train_bleu-1: {train_bleu_1}
-[train] train_bleu-2: {train_bleu_2}
-[train] train_bleu-3: {train_bleu_3}
-[train] train_bleu-4: {train_bleu_4}
-[train] train_cider: {train_cider}
-[train] train_rouge: {train_rouge}
-[train] train_meteor: {train_meteor}
 [val]   val_bleu-1: {val_bleu_1}
 [val]   val_bleu-2: {val_bleu_2}
 [val]   val_bleu-3: {val_bleu_3}
@@ -74,14 +85,14 @@ BEST_REPORT_TEMPLATE = """
 """
 
 class Solver():
-    def __init__(self, model, device, config, dataset, dataloader, optimizer, stamp, val_step=10,
+    def __init__(self, model, device, config, dataset, dataloader, optimizer, stamp, val_step=10, 
     detection=True, caption=True, orientation=False, distance=False, use_tf=True,
     lr_decay_step=None, lr_decay_rate=None, bn_decay_step=None, bn_decay_rate=None,
     criterion="meteor", checkpoint_best=None):
 
         self.epoch = 0                    # set in __call__
         self.verbose = 0                  # set in __call__
-
+        
         self.model = model
         self.device = device
         self.config = config
@@ -123,7 +134,7 @@ class Solver():
             "train": {},
             "val": {}
         }
-
+        
         # tensorboard
         os.makedirs(os.path.join(CONF.PATH.OUTPUT, stamp, "tensorboard/train"), exist_ok=True)
         os.makedirs(os.path.join(CONF.PATH.OUTPUT, stamp, "tensorboard/val"), exist_ok=True)
@@ -139,7 +150,7 @@ class Solver():
         # private
         # only for internal access and temporary results
         self._running_log = {}
-        self._global_iter_id = 1
+        self._global_iter_id = 0
         self._total_iter = {}             # set in __call__
 
         # templates
@@ -174,21 +185,22 @@ class Solver():
         self._total_iter["train"] = len(self.dataloader["train"]) * epoch
         self._total_iter["val"] = (len(self.dataloader["eval"]["train"]) + len(self.dataloader["eval"]["val"])) \
              * (self._total_iter["train"] / self.val_step)
-
+        
         for epoch_id in range(epoch):
             try:
                 if dist.get_rank() == 0:
                     self._log("epoch {} starting...".format(epoch_id + 1))
 
                 # feed
-                self.dataloader["train"].sampler.set_epoch(epoch)
+                self.dataloader["train"].sampler.set_epoch(epoch) 
                 self._feed(self.dataloader["train"], "train", epoch_id)
 
                 # save model
-                if dist.get_rank() == 0:
-                    self._log("saving last models...\n")
-                model_root = os.path.join(CONF.PATH.OUTPUT, self.stamp)
-                torch.save(self.model.module.state_dict(), os.path.join(model_root, "model_last.pth"))
+                if dist.get_rank() == 0 and epoch_id > 0:
+                    self._log("saving epoch_{} models...\n".format(epoch_id))
+                    model_root = os.path.join(CONF.PATH.OUTPUT, self.stamp)
+                    torch.save(self.model.module.state_dict(), os.path.join(model_root, "epoch_{}_model.pth".format(epoch_id)))
+                    
 
                 # update lr scheduler
                 if self.lr_scheduler:
@@ -201,7 +213,7 @@ class Solver():
                     if dist.get_rank() == 0:
                         print("update batch normalization momentum --> {}\n".format(self.bn_scheduler.lmbd(self.bn_scheduler.last_epoch)))
                     self.bn_scheduler.step()
-
+                
             except KeyboardInterrupt:
                 # finish training
                 self._finish(epoch_id)
@@ -214,6 +226,18 @@ class Solver():
         self.log_fout.write(info_str + "\n")
         self.log_fout.flush()
         print(info_str)
+
+    def _reduce_tensor(inp, world_size, average=False):
+        """
+        Reduce the loss from all the process so 
+        that process with rank 0 has average result.
+        """
+        with torch.no_grad():
+            reduced_inp = inp
+            dist.reduce(reduced_inp, dst=0)
+            if average: 
+                reduced_inp = reduced_inp / world_size
+        return reduced_inp
 
     def _reset_log(self, phase):
         if phase == "train":
@@ -308,9 +332,9 @@ class Solver():
 
     def _compute_loss(self, data_dict):
         data_dict = get_scene_cap_loss(
-            data_dict=data_dict,
+            data_dict=data_dict, 
             device=self.device,
-            config=self.config,
+            config=self.config, 
             weights=self.dataset["train"].weights,
             detection=self.detection,
             caption=self.caption,
@@ -371,8 +395,8 @@ class Solver():
     def _feed(self, dataloader, phase, epoch_id, is_eval=False):
         # switch mode
         if is_eval:
-            self._set_phase("val")
-        else:
+            self._set_phase("val") 
+        else:   
             self._set_phase(phase)
 
         # re-init log
@@ -419,7 +443,7 @@ class Solver():
                 start = time.time()
                 self._backward()
                 self.log[phase]["backward"].append(time.time() - start)
-
+                
                 # eval
                 start = time.time()
                 # self._eval(data_dict)
@@ -440,7 +464,7 @@ class Solver():
                 self.log[phase]["obj_acc"].append(self._running_log["obj_acc"])
                 self.log[phase]["pred_ious"].append(self._running_log["pred_ious"])
                 self.log[phase]["pos_ratio"].append(self._running_log["pos_ratio"])
-                self.log[phase]["neg_ratio"].append(self._running_log["neg_ratio"])
+                self.log[phase]["neg_ratio"].append(self._running_log["neg_ratio"])             
 
                 # report
                 if phase == "train":
@@ -453,16 +477,19 @@ class Solver():
                         self._train_report(epoch_id)
 
                     # evaluation
+                    # if (self._global_iter_id+1)>=2000 and (self._global_iter_id+1) % self.val_step == 0 and dist.get_rank() == 0:
                     if self._global_iter_id % self.val_step == 0 and dist.get_rank() == 0:
-                        # eval on train
-                        if dist.get_rank() == 0:
-                            print("evaluating on train...")
-                        self._feed(self.dataloader["eval"]["train"], "train", epoch_id, True)
-                        self._dump_log("train", True)
-
+                        # save model according different steps
+                        # if dist.get_rank() == 0:
+                        #     self._log("saving {}_{} models...\n".format(epoch_id, self._global_iter_id))
+                        #     model_root = os.path.join(CONF.PATH.OUTPUT, self.stamp)
+                        #     torch.save(self.model.module.state_dict(), os.path.join(model_root, "epoch_{}_iter_{}_model.pth".format(epoch_id,self._global_iter_id + 1)))
+                        # print("evaluating on train...")
+                        # self._feed(self.dataloader["eval"]["train"], "train", epoch_id, True)
+                        # self._dump_log("train", True)
+                        
                         # val
-                        if dist.get_rank() == 0:
-                            print("evaluating on val...")
+                        print("evaluating on val...")
                         self._feed(self.dataloader["eval"]["val"], "val", epoch_id, True)
                         self._dump_log("val", True)
 
@@ -482,7 +509,7 @@ class Solver():
                 cur_best = np.sum([np.mean(self.log[phase][m]) for m in metrics])
             else:
                 cur_best = np.mean(self.log[phase][cur_criterion])
-
+            
             if phase == "val" and cur_best > self.best[cur_criterion]:
                 self._log("best {} achieved: {}".format(cur_criterion, cur_best))
 
@@ -509,7 +536,7 @@ class Solver():
         self._log("saving checkpoint...\n")
         save_dict = {
             "epoch": epoch_id,
-            "model_state_dict": self.model.state_dict(),
+            "model_state_dict": self.model.module.state_dict(),
             "optimizer_state_dict": self.optimizer.state_dict(),
             "best": self.best
         }
@@ -519,8 +546,8 @@ class Solver():
         # save model
         if dist.get_rank() == 0:
             self._log("saving last models...\n")
-        model_root = os.path.join(CONF.PATH.OUTPUT, self.stamp)
-        torch.save(self.model.module.state_dict(), os.path.join(model_root, "model_last.pth"))
+            model_root = os.path.join(CONF.PATH.OUTPUT, self.stamp)
+            torch.save(self.model.module.state_dict(), os.path.join(model_root, "model_last.pth"))
 
         # export
         for phase in ["train", "val"]:
@@ -536,14 +563,14 @@ class Solver():
 
         mean_train_time = np.mean(iter_time)
         mean_est_val_time = np.mean([fetch + forward for fetch, forward in zip(fetch_time, forward_time)])
-
+        
         num_train_iter_left = self._total_iter["train"] - self._global_iter_id - 1
         eta_sec = num_train_iter_left * mean_train_time
-
+        
         num_val_times = num_train_iter_left // self.val_step
         eta_sec += len(self.dataloader["eval"]["train"]) * num_val_times * mean_est_val_time
         eta_sec += len(self.dataloader["eval"]["val"]) * num_val_times * mean_est_val_time
-
+        
         eta = decode_eta(eta_sec)
 
         # print report
@@ -580,13 +607,13 @@ class Solver():
         if dist.get_rank() == 0:
             self._log("epoch [{}/{}] done...".format(epoch_id+1, self.epoch))
         epoch_report = self.__epoch_report_template.format(
-            train_bleu_1=round(self.log["train"]["bleu-1"], 5),
-            train_bleu_2=round(self.log["train"]["bleu-2"], 5),
-            train_bleu_3=round(self.log["train"]["bleu-3"], 5),
-            train_bleu_4=round(self.log["train"]["bleu-4"], 5),
-            train_cider=round(self.log["train"]["cider"], 5),
-            train_rouge=round(self.log["train"]["rouge"], 5),
-            train_meteor=round(self.log["train"]["meteor"], 5),
+            # train_bleu_1=round(self.log["train"]["bleu-1"], 5),
+            # train_bleu_2=round(self.log["train"]["bleu-2"], 5),
+            # train_bleu_3=round(self.log["train"]["bleu-3"], 5),
+            # train_bleu_4=round(self.log["train"]["bleu-4"], 5),
+            # train_cider=round(self.log["train"]["cider"], 5),
+            # train_rouge=round(self.log["train"]["rouge"], 5),
+            # train_meteor=round(self.log["train"]["meteor"], 5),
             val_bleu_1=round(self.log["val"]["bleu-1"], 5),
             val_bleu_2=round(self.log["val"]["bleu-2"], 5),
             val_bleu_3=round(self.log["val"]["bleu-3"], 5),
@@ -597,7 +624,7 @@ class Solver():
         )
         if dist.get_rank() == 0:
             self._log(epoch_report)
-
+    
     def _best_report(self):
         if dist.get_rank() == 0:
             self._log("training completed...")
