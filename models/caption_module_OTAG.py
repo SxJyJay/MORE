@@ -381,9 +381,6 @@ class OTAGCaptionModule(nn.Module):
             data_dict = self._forward_sample_batch(data_dict, max_len)
         else:
             data_dict, hyper_node_feats = self._forward_scene_batch(data_dict, use_tf, max_len)
-            adj_mat = data_dict["adjacent_mat"]
-            batch_MAD = self._MAD(hyper_node_feats, adj_mat)
-            data_dict["MAD"] = batch_MAD
             
         return data_dict
         
