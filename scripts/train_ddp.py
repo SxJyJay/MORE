@@ -24,6 +24,7 @@ sys.path.append(os.path.join(os.getcwd())) # HACK add the root folder
 from data.scannet.model_util_scannet import ScannetDatasetConfig
 from lib.dataset import ScannetReferenceDataset
 from lib.solver_ddp import Solver
+# from lib.solver_ddp_with_train_log import Solver
 from lib.config import CONF
 from models.capnet import CapNet
 from scripts.eval_pretrained import SCANREFER_TRAIN
@@ -77,12 +78,18 @@ def get_model(args, dataset, device):
         num_locals=args.num_locals,
         query_mode=args.query_mode,
         graph_mode=args.graph_mode,
+        beta=args.beta,
+        drop_prob=args.drop_prob,
+        node_coord_type=args.node_coord_type,
         graph_module=args.graph_module,
+        decoder_module=args.decoder_module,
         num_graph_steps=args.num_graph_steps,
         use_relation=args.use_relation,
         use_orientation=args.use_orientation,
         use_distance=args.use_distance,
-        use_new=args.use_new
+        use_new=args.use_new,
+        use_gate_fusion=args.use_gate_fusion,
+        hyper_param_gate=args.hyper_param_gate,
     )
 
     # load pretrained model
@@ -354,8 +361,12 @@ if __name__ == "__main__":
     
     parser.add_argument("--query_mode", type=str, default="center", help="Mode for querying the local context, [choices: center, corner]")
     parser.add_argument("--graph_mode", type=str, default="edge_conv", help="Mode for querying the local context, [choices: graph_conv, edge_conv]")
-    parser.add_argument("--graph_module", type=str, default="scan2cap", help="Use the original scan2cap graph module or our modified graph")
+    parser.add_argument("--graph_module", type=str, default="scan2cap", help="Use the original scan2cap graph module or our modified graph as encoder")
+    parser.add_argument("--decoder_module", type=str, default="hyper_node", help="Type of decoder")
     parser.add_argument("--graph_aggr", type=str, default="add", help="Mode for aggregating features, [choices: add, mean, max]")
+    parser.add_argument("--node_coord_type", type=str, default="center", help="Coordinate type for encoding the absolute position of proposal, [choices: center, corner]")
+    parser.add_argument("--beta", type=str, default=False, help="Use the gating mechanism in Transformer-Conv")
+    parser.add_argument("--drop_prob", default=0.0, type=float, help="probability to drop edges in graph encoder")
     
     parser.add_argument("--no_height", action="store_true", help="Do NOT use height signal in input.")
     parser.add_argument("--no_augment", action="store_true", help="Do NOT use height signal in input.")
@@ -364,15 +375,17 @@ if __name__ == "__main__":
     
     parser.add_argument("--use_tf", action="store_true", help="enable teacher forcing in inference.")
     parser.add_argument("--use_color", action="store_true", help="Use RGB color in input.")
-    parser.add_argument("--use_normal", default=True, action="store_true", help="Use RGB color in input.")
+    parser.add_argument("--use_normal", action="store_true", help="Use RGB color in input.")
     parser.add_argument("--use_multiview", action="store_true", help="Use multiview images.")
     parser.add_argument("--use_topdown", default=True, action="store_true", help="Use top-down attention for captioning.")
     parser.add_argument("--use_relation", default=True, action="store_true", help="Use object-to-object relation in graph.")
     parser.add_argument("--use_new", action="store_true", help="Use new Top-down module.")
-    parser.add_argument("--use_orientation", default=True, action="store_true", help="Use object-to-object orientation loss in graph.")
+    parser.add_argument("--use_orientation", action="store_true", help="Use object-to-object orientation loss in graph.")
     parser.add_argument("--use_distance", action="store_true", help="Use object-to-object distance loss in graph.")
     parser.add_argument("--use_pretrained", type=str, help="Specify the folder name containing the pretrained detection module.")
     parser.add_argument("--use_checkpoint", type=str, help="Specify the checkpoint root", default="")
+    parser.add_argument("--use_gate_fusion", action="store_true", help="Use learnable gate to control dual graph feature fusion")
+    parser.add_argument("--hyper_param_gate", default=0.1, type=float)
     parser.add_argument("--local_rank", default=-1, type=int)
 
     parser.add_argument("--debug", action="store_true", help="Debug mode.")
