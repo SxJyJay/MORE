@@ -27,6 +27,7 @@ Note that arguments must match ones for training.
 |  :----:  | :----:  |  :----:  |  :----:  |  :----:  |
 | MORE<sub>rgb  | 38.98 | 23.01 | 21.65 | 44.33 |
 | MORE<sub>mul  | 40.94 | 22.93 | 21.66 | 44.42 |
+Since the caption metrics are not stable, we recommend you to save the checkpoints at every epoch and load the checkpoint with higher validation performance during testing for better performance.
 
 ## Citation
 If you found our project helpful, please kindly cite our paper via:
