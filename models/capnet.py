@@ -9,16 +9,16 @@ from models.backbone_module import Pointnet2Backbone
 from models.voting_module import VotingModule
 from models.proposal_module import ProposalModule
 from models.graph_module import GraphModule
-from models.my_graph_module import MyGraphModule
-from models.caption_module import SceneCaptionModule, TopDownSceneCaptionModule
+from models.SLGC import SLGC
+from models.caption_module_OTAG import OTAGCaptionModule
 
 
 class CapNet(nn.Module):
     def __init__(self, num_class, vocabulary, embeddings, num_heading_bin, num_size_cluster, mean_size_arr, 
     input_feature_dim=0, num_proposal=256, num_locals=-1, vote_factor=1, sampling="vote_fps",
     no_caption=False, use_topdown=False, query_mode="corner", 
-    graph_mode="graph_conv", graph_module="scan2cap", num_graph_steps=0, use_relation=False, graph_aggr="add",
-    use_orientation=False, num_bins=6, use_distance=False, use_new=False, 
+    graph_mode="graph_conv", graph_module="scan2cap", decoder_module="hyper_node", node_coord_type="center", num_graph_steps=0, use_relation=False, graph_aggr="add",
+    use_orientation=False, num_bins=6, use_distance=False, use_new=False, use_gate_fusion=True, hyper_param_gate=0.1, beta=False, drop_prob=0.0,
     emb_size=300, hidden_size=512):
         super().__init__()
 
@@ -51,17 +51,23 @@ class CapNet(nn.Module):
             if graph_module == "scan2cap":
                 self.graph = GraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals, 
                     query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr, 
-                    return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance)
-            else:
-                print("using my graph module!")
-                self.graph = MyGraphModule(128, 128, num_graph_steps, num_proposal, 128, num_locals, embeddings,
+                    return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance, beta=beta, drop_prob=drop_prob)
+            elif graph_module == "SLGC":
+                print("using SLGC module!")
+                self.graph = SLGC(128, 128, num_graph_steps, num_proposal, 128, num_locals, embeddings,
                     query_mode, graph_mode, return_edge=use_relation, graph_aggr=graph_aggr, 
                     return_orientation=use_orientation, num_bins=num_bins, return_distance=use_distance)
+            else:
+                print("Invalid graph name!!!")
+                exit(0)
 
         # Caption generation
         if not no_caption:
-            if use_topdown:
+            if decoder_module == "topdown":
                 self.caption = TopDownSceneCaptionModule(vocabulary, embeddings, emb_size, 128, 
+                    hidden_size, num_proposal, num_locals, query_mode, use_relation)
+            elif decoder_module == "OTAG":
+                self.caption = OTAGCaptionModule(vocabulary, embeddings, emb_size, 128, 
                     hidden_size, num_proposal, num_locals, query_mode, use_relation)
             else:
                 self.caption = SceneCaptionModule(vocabulary, embeddings, emb_size, 128, hidden_size, num_proposal)
