@@ -306,15 +306,6 @@ class OTAGCaptionModule(nn.Module):
 
         return hidden_1, hidden_2, masks, attended
 
-    def _MAD(self, node_feat, adj_mat):
-        node_feat = node_feat.unsqueeze(2) # batch_size, num_locals, 1, feat_size
-        cos = nn.CosineSimilarity(dim=-1)
-        cos_dis_mat = 1 - cos(node_feat, node_feat.permute(0,2,1,3)) # batch_size, num_locals, num_locals
-        cos_dis_mat = cos_dis_mat * adj_mat
-        res = cos_dis_mat.sum() / adj_mat.sum()
-
-        return res
-
     def _nn_distance(self, pc1, pc2):
         """
         Input:
