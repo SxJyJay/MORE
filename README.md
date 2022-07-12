@@ -40,3 +40,5 @@ If you found our project helpful, please kindly cite our paper via:
   year={2022}
 }
 ```
+## Acknowledgement
+We sincerely thank the authors of [Scan2Cap](https://github.com/daveredrum/Scan2Cap) for open sourcing their data and code. Part of the code in our project are from Scan2Cap.
