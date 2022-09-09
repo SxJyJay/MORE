@@ -22,6 +22,8 @@ To evaluate the caption performances, please run
 ```
 Note that arguments must match ones for training.
 
+If you find any problems, feel free to make an issue.
+
 ## Performances
 |  model   | C@0.5IoU  | B-4@0.5IoU | M@0.5IoU | R@0.5IoU
 |  :----:  | :----:  |  :----:  |  :----:  |  :----:  |
