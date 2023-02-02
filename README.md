@@ -35,11 +35,13 @@ Since the caption metrics are not stable, we recommend you to save the checkpoin
 ## Citation
 If you found our project helpful, please kindly cite our paper via:
 ```
-@article{jiao2022more,
-  title={MORE: Multi-Order RElation Mining for Dense Captioning in 3D Scenes},
+@inproceedings{jiao2022more,
+  title={More: Multi-order relation mining for dense captioning in 3d scenes},
   author={Jiao, Yang and Chen, Shaoxiang and Jie, Zequn and Chen, Jingjing and Ma, Lin and Jiang, Yu-Gang},
-  journal={arXiv preprint arXiv:2203.05203},
-  year={2022}
+  booktitle={Computer Vision--ECCV 2022: 17th European Conference, Tel Aviv, Israel, October 23--27, 2022, Proceedings, Part XXXV},
+  pages={528--545},
+  year={2022},
+  organization={Springer}
 }
 ```
 ## Acknowledgement
